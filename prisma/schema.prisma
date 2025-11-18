@@ -13,21 +13,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PlaybookStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model User {
+  id                String              @id @default(cuid())
+  email             String              @unique
+  name              String
+  bio               String?
+  avatarUrl         String?
+  metadata          String?             // JSON: custom user metadata
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  playbooks         Playbook[]
+  sessions          PlaybookSession[]
+  feedback          SessionFeedback[]
+  comments          PlaybookComment[]
+
+  @@index([email])
+}
+
 model Playbook {
-  id                          String          @id @default(cuid())
+  id                          String                @id @default(cuid())
   communityId                 String?
-  key                         String          @unique
+  creatorId                   String?
+  key                         String                @unique
   title                       String
   descriptionMarkdown         String?
-  intendedGroupSizeRangeJson  String?         // JSON: { min: number, max: number }
-  tagsJson                    String?         // JSON: string[]
-  createdAt                   DateTime        @default(now())
-  updatedAt                   DateTime        @updatedAt
+  status                      PlaybookStatus        @default(DRAFT)
+  difficulty                  DifficultyLevel?
+  intendedGroupSizeRangeJson  String?               // JSON: { min: number, max: number }
+  tagsJson                    String?               // JSON: string[]
+  prerequisitesJson           String?               // JSON: string[]
+  categoryJson                String?               // JSON: string[]
+  language                    String                @default("en")
+  settingsJson                String?               // JSON: custom settings
+  version                     Int                   @default(1)
+  createdAt                   DateTime              @default(now())
+  updatedAt                   DateTime              @updatedAt
+  publishedAt                 DateTime?
 
+  creator                     User?                 @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   phases                      PlaybookPhase[]
+  versions                    PlaybookVersion[]
+  sessions                    PlaybookSession[]
+  comments                    PlaybookComment[]
 
   @@index([communityId])
   @@index([key])
+  @@index([creatorId])
+  @@index([status])
+  @@index([difficulty])
 }
 
 model PlaybookPhase {
@@ -61,4 +107,85 @@ model PlaybookStep {
   phase                   PlaybookPhase   @relation(fields: [phaseId], references: [id], onDelete: Cascade)
 
   @@index([phaseId, orderIndex])
+}
+
+model PlaybookVersion {
+  id                  String      @id @default(cuid())
+  playbookId          String
+  versionNumber       Int
+  snapshotJson        String      // JSON: full playbook snapshot at this version
+  changeDescription   String?
+  createdAt           DateTime    @default(now())
+
+  playbook            Playbook    @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+
+  @@unique([playbookId, versionNumber])
+  @@index([playbookId])
+}
+
+enum SessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model PlaybookSession {
+  id                    String            @id @default(cuid())
+  playbookId            String
+  facilitatorId         String
+  title                 String?
+  status                SessionStatus     @default(SCHEDULED)
+  scheduledAt           DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  participantCount      Int?
+  actualDurationMinutes Int?
+  contextJson           String?           // JSON: session-specific context
+  notesMarkdown         String?           // Facilitator notes during/after session
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  playbook              Playbook          @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  facilitator           User              @relation(fields: [facilitatorId], references: [id], onDelete: Cascade)
+  feedback              SessionFeedback[]
+
+  @@index([playbookId])
+  @@index([facilitatorId])
+  @@index([status])
+}
+
+model SessionFeedback {
+  id                String          @id @default(cuid())
+  sessionId         String
+  userId            String?
+  rating            Int?            // 1-5 scale
+  feedbackText      String?
+  suggestionsText   String?
+  wouldRecommend    Boolean?
+  metadata          String?         // JSON: additional feedback data
+  createdAt         DateTime        @default(now())
+
+  session           PlaybookSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user              User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([userId])
+}
+
+model PlaybookComment {
+  id              String    @id @default(cuid())
+  playbookId      String
+  authorId        String
+  content         String
+  resolved        Boolean   @default(false)
+  metadata        String?   // JSON: e.g., target phase/step ID, suggestions
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  playbook        Playbook  @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  author          User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([playbookId])
+  @@index([authorId])
 }
