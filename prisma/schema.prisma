@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Playbook {
+  id                          String          @id @default(cuid())
+  communityId                 String?
+  key                         String          @unique
+  title                       String
+  descriptionMarkdown         String?
+  intendedGroupSizeRangeJson  String?         // JSON: { min: number, max: number }
+  tagsJson                    String?         // JSON: string[]
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
+
+  phases                      PlaybookPhase[]
+
+  @@index([communityId])
+  @@index([key])
+}
+
+model PlaybookPhase {
+  id              String          @id @default(cuid())
+  playbookId      String
+  orderIndex      Int
+  name            String
+  goalMarkdown    String?
+  durationMinutes Int?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  playbook        Playbook        @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  steps           PlaybookStep[]
+
+  @@index([playbookId, orderIndex])
+}
+
+model PlaybookStep {
+  id                      String          @id @default(cuid())
+  phaseId                 String
+  orderIndex              Int
+  instructionMarkdown     String?
+  promptQuestionsMarkdown String?
+  facilitatorNotesMarkdown String?
+  durationMinutes         Int?
+  metaJson                String?         // JSON: arbitrary metadata
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  phase                   PlaybookPhase   @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+
+  @@index([phaseId, orderIndex])
+}
